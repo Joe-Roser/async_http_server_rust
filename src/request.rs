@@ -7,20 +7,28 @@ use std::{
 
 use tokio::io::AsyncReadExt;
 
+// The Request struct
+//
+// Stores all the imporant data from a request in a more usable formmat
 #[derive(Debug)]
 pub struct Request {
-    method: RequestMethod,
-    path: Box<Path>,
-    version: HttpVersion,
-    headers: BTreeSet<Header>,
-    body: String,
+    pub(crate) method: RequestMethod,
+    pub(crate) path: Box<Path>,
+    pub(crate) version: HttpVersion,
+    pub(crate) headers: BTreeSet<Header>,
+    pub(crate) body: String,
 }
 
 impl Request {
+    // Takes in a socket and returns a result on wether it could parse a http request from it.
     pub async fn try_from_socket<S: AsyncReadExt + Unpin>(
         socket: S,
     ) -> Result<Request, RequestError> {
         RequestParser::new().parse_from_socket(socket).await
+    }
+
+    pub fn get_path<'a>(&'a self) -> Box<Path> {
+        self.path.clone()
     }
 }
 impl Display for Request {
@@ -57,7 +65,7 @@ impl Display for RequestMethod {
 }
 
 #[derive(Debug)]
-enum HttpVersion {
+pub enum HttpVersion {
     OnePointOne,
 }
 impl Display for HttpVersion {
@@ -89,6 +97,8 @@ pub enum RequestError {
 
 const BUF_SIZE: usize = 2048;
 
+// The struct that does the actual parsing
+//
 #[derive(Debug)]
 struct RequestParser {
     state: RequestParserState,
@@ -117,6 +127,7 @@ impl RequestParser {
             body: String::new(),
         }
     }
+    // The actual meat of the parsing
     async fn parse_from_socket<S: AsyncReadExt + Unpin>(
         mut self,
         mut socket: S,
@@ -148,6 +159,7 @@ impl RequestParser {
         Ok(self.to_request()?)
     }
 
+    // Takes in a line and deals with it
     fn parse_chunk(&mut self, hang: String, idx: usize) -> Result<String, RequestError> {
         let line = &hang[..idx];
 
@@ -202,6 +214,7 @@ impl RequestParser {
         Ok(hang[idx + 2..].to_string())
     }
 
+    // Converts the builder to an actual request
     fn to_request(self) -> Result<Request, RequestError> {
         let method = self.method.ok_or(RequestError::Unfinished)?;
         let path = self.path.ok_or(RequestError::Unfinished)?.into_boxed_path();
