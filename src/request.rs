@@ -7,12 +7,14 @@ use std::{
 
 use tokio::io::AsyncReadExt;
 
+use crate::{Header, HttpMethod, HttpVersion};
+
 // The Request struct
 //
 // Stores all the imporant data from a request in a more usable formmat
 #[derive(Debug)]
 pub struct Request {
-    pub(crate) method: RequestMethod,
+    pub(crate) method: HttpMethod,
     pub(crate) path: Box<Path>,
     pub(crate) version: HttpVersion,
     pub(crate) headers: BTreeSet<Header>,
@@ -50,41 +52,6 @@ impl Display for Request {
 }
 
 #[derive(Debug)]
-pub enum RequestMethod {
-    Get,
-}
-
-impl Display for RequestMethod {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let out = match self {
-            Self::Get => "GET",
-        };
-
-        write!(f, "{}", out)
-    }
-}
-
-#[derive(Debug)]
-pub enum HttpVersion {
-    OnePointOne,
-}
-impl Display for HttpVersion {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let out = match self {
-            Self::OnePointOne => "HTTP/1.1",
-        };
-
-        write!(f, "{}", out)
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Header {
-    title: String,
-    val: String,
-}
-
-#[derive(Debug)]
 pub enum RequestError {
     Unfinished,
     SocketReadError,
@@ -102,7 +69,7 @@ const BUF_SIZE: usize = 2048;
 #[derive(Debug)]
 struct RequestParser {
     state: RequestParserState,
-    method: Option<RequestMethod>,
+    method: Option<HttpMethod>,
     path: Option<PathBuf>,
     version: Option<HttpVersion>,
     headers: BTreeSet<Header>,
@@ -142,8 +109,6 @@ impl RequestParser {
                 .await
                 .map_err(|_| RequestError::SocketReadError)?;
 
-            println!("{}", String::from_utf8_lossy(&buf));
-
             // Make sure chunk ends in a complete line
             let chunk = str::from_utf8(&buf[..n]).map_err(|_| RequestError::InvalidUtf8)?;
             hang.push_str(chunk);
@@ -166,9 +131,10 @@ impl RequestParser {
         match self.state {
             RequestParserState::ReqLine => {
                 let mut rl = line.split(" ");
+                println!("{}", line);
 
                 match rl.next() {
-                    Some("GET") => self.method = Some(RequestMethod::Get),
+                    Some("GET") => self.method = Some(HttpMethod::Get),
                     Some(_) => {
                         return Err(RequestError::RlParseError("Not a valid method".to_string()));
                     }
@@ -195,7 +161,6 @@ impl RequestParser {
             RequestParserState::Headers => {
                 if line == String::new() {
                     self.state = RequestParserState::Body;
-                    println!("headers done");
                 } else {
                     let (title, val) = line.rsplit_once(": ").ok_or(RequestError::BadHeader)?;
                     self.headers.insert(Header {
