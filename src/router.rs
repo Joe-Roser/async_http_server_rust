@@ -34,6 +34,8 @@ impl RouterBuilder {
                 name: "".to_string().into_boxed_str(),
                 children: Vec::new(),
                 handlers: Vec::new(),
+                pre_middleware: Vec::new(),
+                post_middleware: Vec::new(),
             },
         }
     }
@@ -43,7 +45,13 @@ impl RouterBuilder {
         path: &'static str,
         handle: impl Fn(Request) -> Result<Response, HandlerError> + Send + Sync + 'static,
     ) -> Self {
-        self.index.insert(0b00000001, path.split("/"), handle);
+        let mut path_iter = path.split("/");
+        if let Some("") = path_iter.next() {
+        } else {
+            panic!("Expected path of format '/...'")
+        }
+
+        self.index.insert(2, path_iter, handle);
         self
     }
 

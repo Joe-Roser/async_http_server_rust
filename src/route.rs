@@ -1,25 +1,14 @@
-use std::{path::Iter, str::Split};
+use std::{fmt::Debug, path::Iter, str::Split};
 
 use crate::{Request, Response};
 
+#[derive(Debug)]
 pub struct Route {
     pub(crate) name: Box<str>,
     pub(crate) children: Vec<Box<Route>>,
-    pub(crate) handlers:
-        Vec<Box<dyn Fn(Request) -> Result<Response, HandlerError> + Send + Sync + 'static>>,
-}
-
-impl std::fmt::Debug for Route {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Route")
-            .field("name", &self.name)
-            .field("children", &self.children)
-            .finish()?;
-        for _ in self.handlers.iter() {
-            write!(f, "A handler!! ")?;
-        }
-        Ok(())
-    }
+    pub(crate) handlers: Vec<Handler>,
+    pub(crate) pre_middleware: Vec<PreMiddleware>,
+    pub(crate) post_middleware: Vec<PostMiddleware>,
 }
 
 impl Route {
@@ -39,13 +28,20 @@ impl Route {
 
     pub fn insert(
         &mut self,
-        method: u8,
+        method: u16,
         mut path_iter: Split<'static, &'static str>,
         handle: impl Fn(Request) -> Result<Response, HandlerError> + Send + Sync + 'static,
     ) {
         match path_iter.next() {
-            Some("") => {
-                self.handlers.push(Box::new(handle));
+            Some("") | None => {
+                if let None = self.handlers.iter().find(|h| h.method & method != 0) {
+                    self.handlers.push(Handler {
+                        handle: Box::new(handle),
+                        method: method,
+                    });
+                } else {
+                    panic!("Method collision on this path")
+                }
             }
             Some("_") => {
                 if self.children.is_empty() {
@@ -53,6 +49,8 @@ impl Route {
                         name: "".to_string().into_boxed_str(),
                         children: Vec::new(),
                         handlers: Vec::new(),
+                        pre_middleware: Vec::new(),
+                        post_middleware: Vec::new(),
                     };
                     new_route.insert(method, path_iter, handle);
                     self.children.push(Box::new(new_route));
@@ -70,22 +68,54 @@ impl Route {
                     name: p.to_string().into_boxed_str(),
                     children: Vec::new(),
                     handlers: Vec::new(),
+                    pre_middleware: Vec::new(),
+                    post_middleware: Vec::new(),
                 };
                 new_route.insert(method, path_iter, handle);
 
                 self.children.push(Box::new(new_route));
             }
-            None => {
-                panic!()
-            }
         }
     }
 
     fn serve(&self, req: Request) -> Result<Response, HandlerError> {
-        self.handlers.get(0).unwrap()(req)
+        if let Some(h) = self
+            .handlers
+            .iter()
+            .find(|h| h.method & req.method as u16 != 0)
+        {
+            (h.handle)(req)
+        } else {
+            Err(HandlerError::NotFound)
+        }
     }
 }
 
 pub enum HandlerError {
     NotFound,
 }
+
+pub struct Handler {
+    handle: Box<dyn Fn(Request) -> Result<Response, HandlerError> + Send + Sync + 'static>,
+    method: u16,
+}
+impl Debug for Handler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        const METHODS: [&str; 9] = [
+            "HEAD", "GET", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH",
+        ];
+
+        for (i, m) in METHODS.iter().enumerate() {
+            if (1 << i as u16) & self.method != 0 {
+                write!(f, "{}, ", m)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct PreMiddleware {}
+#[derive(Debug)]
+pub struct PostMiddleware {}
