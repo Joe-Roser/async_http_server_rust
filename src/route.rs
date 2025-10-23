@@ -1,8 +1,11 @@
 use std::{fmt::Debug, path::Iter, str::Split};
 
-use crate::{Request, Response};
+use crate::{
+    Request, Response,
+    middleware::{PostMiddleware, PreMiddleware},
+    response::ResponseResult,
+};
 
-#[derive(Debug)]
 pub struct Route {
     pub(crate) name: Box<str>,
     pub(crate) children: Vec<Box<Route>>,
@@ -11,8 +14,22 @@ pub struct Route {
     pub(crate) post_middleware: Vec<PostMiddleware>,
 }
 
+impl Debug for Route {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Route")
+            .field("name", &self.name)
+            .field("children", &self.children)
+            .field("handlers", &self.handlers)
+            .field("pre_middleware", &self.pre_middleware.len())
+            .field("post_middleware", &self.post_middleware.len())
+            .finish()
+    }
+}
 impl Route {
-    pub fn route(&self, req: Request, mut path_iter: Iter<'_>) -> Result<Response, HandlerError> {
+    pub fn route(&self, mut req: Request, mut path_iter: Iter<'_>) -> ResponseResult {
+        for mw in &self.pre_middleware {
+            req = mw.use_mw(req);
+        }
         match path_iter.next() {
             None => self.serve(req),
             Some(p) => {
@@ -30,7 +47,7 @@ impl Route {
         &mut self,
         method: u16,
         mut path_iter: Split<'static, &'static str>,
-        handle: impl Fn(Request) -> Result<Response, HandlerError> + Send + Sync + 'static,
+        handle: impl Fn(Request) -> ResponseResult + Send + Sync + 'static,
     ) {
         match path_iter.next() {
             Some("") | None => {
@@ -78,7 +95,7 @@ impl Route {
         }
     }
 
-    fn serve(&self, req: Request) -> Result<Response, HandlerError> {
+    fn serve(&self, req: Request) -> ResponseResult {
         if let Some(h) = self
             .handlers
             .iter()
@@ -96,7 +113,7 @@ pub enum HandlerError {
 }
 
 pub struct Handler {
-    handle: Box<dyn Fn(Request) -> Result<Response, HandlerError> + Send + Sync + 'static>,
+    handle: Box<dyn Fn(Request) -> ResponseResult + Send + Sync + 'static>,
     method: u16,
 }
 impl Debug for Handler {
@@ -114,8 +131,3 @@ impl Debug for Handler {
         Ok(())
     }
 }
-
-#[derive(Debug)]
-pub struct PreMiddleware {}
-#[derive(Debug)]
-pub struct PostMiddleware {}

@@ -29,8 +29,16 @@ impl Request {
         RequestParser::new().parse_from_socket(socket).await
     }
 
-    pub fn get_path<'a>(&'a self) -> Box<Path> {
+    pub fn get_path(&self) -> Box<Path> {
         self.path.clone()
+    }
+
+    pub fn fmt_method(&self) -> &'static str {
+        self.method.display()
+    }
+
+    pub fn fmt_path<'a>(&'a self) -> &'a str {
+        self.path.to_str().unwrap()
     }
 }
 impl Display for Request {
@@ -131,7 +139,6 @@ impl RequestParser {
         match self.state {
             RequestParserState::ReqLine => {
                 let mut rl = line.split(" ");
-                println!("{}", line);
 
                 match rl.next() {
                     Some("GET") => self.method = Some(HttpMethod::Get),
@@ -170,8 +177,6 @@ impl RequestParser {
                 }
             }
             RequestParserState::Body => {
-                println!("{:?}", self);
-                println!("Got to body!!!");
                 self.body.push_str(line);
             }
         }

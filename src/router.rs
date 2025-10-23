@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{Request, Response, Route, route::HandlerError};
+use crate::{Request, Response, Route, middleware, response::ResponseResult, route::HandlerError};
 
 #[derive(Debug)]
 pub struct Router {
@@ -43,7 +43,7 @@ impl RouterBuilder {
     pub fn get(
         mut self,
         path: &'static str,
-        handle: impl Fn(Request) -> Result<Response, HandlerError> + Send + Sync + 'static,
+        handle: impl Fn(Request) -> ResponseResult + Send + Sync + 'static,
     ) -> Self {
         let mut path_iter = path.split("/");
         if let Some("") = path_iter.next() {
@@ -52,6 +52,26 @@ impl RouterBuilder {
         }
 
         self.index.insert(2, path_iter, handle);
+        self
+    }
+
+    pub fn premiddleware(
+        mut self,
+        handle: impl Fn(Request) -> Request + Send + Sync + 'static,
+    ) -> Self {
+        self.index
+            .pre_middleware
+            .push(middleware::PreMiddleware::new(handle));
+        self
+    }
+
+    pub fn postmiddleware(
+        mut self,
+        handle: impl Fn(ResponseResult) -> ResponseResult + Send + Sync + 'static,
+    ) -> Self {
+        self.index
+            .post_middleware
+            .push(middleware::PostMiddleware::new(handle));
         self
     }
 

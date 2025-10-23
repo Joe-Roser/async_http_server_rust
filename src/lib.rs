@@ -1,3 +1,4 @@
+pub mod middleware;
 pub mod request;
 pub mod response;
 pub mod route;
@@ -40,6 +41,19 @@ impl Display for HttpMethod {
     }
 }
 impl HttpMethod {
+    pub fn display(&self) -> &'static str {
+        match self {
+            Self::Head => "HEAD",
+            Self::Get => "GET",
+            Self::Post => "POST",
+            Self::Put => "PUT",
+            Self::Delete => "DELETE",
+            Self::Connect => "CONNECT",
+            Self::Options => "OPTIONS",
+            Self::Trace => "TRACE",
+            Self::Patch => "PATCH",
+        }
+    }
     pub fn as_bytes(self) -> &'static [u8] {
         match self {
             Self::Head => b"HEAD",

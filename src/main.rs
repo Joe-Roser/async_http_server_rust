@@ -11,8 +11,11 @@ async fn main() {
     let router = Router::builder()
         .get("/", get_index)
         .get("/users", get_users)
+        .premiddleware(logger)
         .build()
         .unwrap();
+
+    println!("{router:?}");
 
     let listener = TcpListener::bind(ADDR)
         .await
@@ -49,4 +52,9 @@ fn get_users(_req: Request) -> Result<Response, HandlerError> {
         headers: Vec::new(),
         body: "<h1>OMG I DID IT</h1>".to_string(),
     })
+}
+
+fn logger(req: Request) -> Request {
+    println!("{}: {}", req.fmt_method(), req.fmt_path());
+    req
 }

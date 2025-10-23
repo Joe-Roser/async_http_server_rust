@@ -2,6 +2,9 @@ use std::fmt::Display;
 
 use crate::Header;
 use crate::HttpVersion;
+use crate::route::HandlerError;
+
+pub type ResponseResult = Result<Response, HandlerError>;
 
 #[derive(Debug)]
 pub struct Response {
